@@ -1,4 +1,3 @@
-// hooks/useFetchData.js
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -12,31 +11,18 @@ export function useSemesters() {
     async function fetchSemesters() {
       try {
         setLoading(true);
-        console.log("⏳ Mengambil data Semester...");
-
-        // Coba 1: Tabel 'Semester' (Huruf Besar)
-        let { data, error } = await supabase
-          .from('Semester') 
+        
+        // Langsung tembak tabel 'semester' (lowercase)
+        const { data, error } = await supabase
+          .from('semester') 
           .select('*')
           .order('order', { ascending: true });
-
-        // Coba 2: Tabel 'semester' (Huruf Kecil) - Fallback
-        if (error) {
-          console.log("⚠️ Gagal dengan 'Semester', mencoba 'semester'...");
-          const retry = await supabase
-            .from('semester')
-            .select('*')
-            .order('order', { ascending: true });
-          
-          data = retry.data;
-          error = retry.error;
-        }
 
         if (error) throw error;
 
         setSemesters(data || []);
       } catch (err) {
-        console.error("❌ ERROR SUPABASE:", err.message);
+        console.error("❌ Error fetch semesters:", err.message);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -62,23 +48,12 @@ export function useCoursesBySemester(semesterId) {
       try {
         setLoading(true);
         
-        // Coba 1: 'Course'
-        let { data, error } = await supabase
-          .from('Course')
+        // Langsung tembak tabel 'course' (lowercase)
+        const { data, error } = await supabase
+          .from('course')
           .select('*')
           .eq('semesterId', semesterId)
           .order('name', { ascending: true });
-        
-        // Coba 2: 'course'
-        if (error) {
-           const retry = await supabase
-             .from('course')
-             .select('*')
-             .eq('semesterId', semesterId)
-             .order('name', { ascending: true });
-           data = retry.data;
-           error = retry.error;
-        }
 
         if (error) throw error;
         
@@ -101,7 +76,7 @@ export function useCoursesBySemester(semesterId) {
 export function useCourseDetail(courseId) {
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // State error ditambahkan
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!courseId) return;
@@ -110,28 +85,15 @@ export function useCourseDetail(courseId) {
       try {
         setLoading(true);
         
-        // Coba 1: 'Course' dengan join 'Material'
-        let { data, error } = await supabase
-          .from('Course')
-          .select(`*, materials:Material(*)`)
+        // Langsung tembak tabel 'course' dan join ke 'material' (lowercase semua)
+        const { data, error } = await supabase
+          .from('course')
+          .select(`*, materials:material(*)`) 
           .eq('id', courseId)
           .single();
 
-        // Coba 2: 'course' dengan join 'material' (huruf kecil semua)
-        if (error) {
-           const retry = await supabase
-            .from('course')
-            .select(`*, materials:material(*)`)
-            .eq('id', courseId)
-            .single();
-            
-           if (retry.data) {
-             data = retry.data;
-             error = null;
-           }
-        }
-
         if (error) throw error;
+        
         setCourse(data);
 
       } catch (err) {
@@ -146,4 +108,43 @@ export function useCourseDetail(courseId) {
   }, [courseId]);
 
   return { course, loading, error };
+}
+
+// ... kode hook useSemesters, useCoursesBySemester, useCourseDetail sebelumnya ...
+
+// 4. Hook untuk PENCARIAN Mata Kuliah
+export function useSearchCourses() {
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const search = async (query) => {
+    if (!query || query.trim() === '') {
+      setResults([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("🔍 Mencari:", query);
+
+      // Mencari di tabel 'course' kolom 'name' yang mengandung teks query (ilike = case insensitive)
+      const { data, error } = await supabase
+        .from('course')
+        .select('*')
+        .ilike('name', `%${query}%`)
+        .limit(20); // Batasi hasil agar tidak terlalu banyak
+
+      if (error) throw error;
+      
+      setResults(data || []);
+    } catch (err) {
+      console.error("❌ Error search:", err.message);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { search, results, loading, error };
 }

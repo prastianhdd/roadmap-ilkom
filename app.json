@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "RoadmapIlkom",
+    "name": "Roadmap Ilkom",
     "slug": "RoadmapIlkom",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.computerscience.roadmapilkom",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -44,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "baa79582-fe20-4e8c-9f59-56667595ab07"
+      }
     }
   }
 }

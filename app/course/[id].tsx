@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Linking, ActivityIndicator, Alert } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { FileText, Video, Link as LinkIcon, DownloadCloud } from 'lucide-react-native';
 import { COLORS, SIZES } from '../../lib/theme';
 import { useCourseDetail } from '../../hooks/useFetchData';
+import { handleFileOpen } from '../../lib/fileHandler';
 
-// 1. Definisi Tipe Data (Agar TypeScript tidak bingung membaca 'never')
+// Definisi Tipe Data
 interface Material {
   id: number;
   title: string;
@@ -21,27 +22,35 @@ interface Course {
   materials: Material[];
 }
 
+// 1. Definisi Peta Warna (Sama seperti di CourseCard)
+const CATEGORY_COLORS: { [key: string]: string } = {
+  green: '#10B981', // Emerald
+  blue: '#3B82F6',  // Blue
+  yellow: '#F59E0B', // Amber
+  red: '#EF4444',   // Red
+  default: COLORS.primary,
+};
+
 export default function CourseDetail() {
-  const { id } = useLocalSearchParams();
+  // 2. Ambil juga parameter 'category' dan 'name' dari navigasi sebelumnya
+  // agar warna bisa langsung muncul sebelum data loading selesai
+  const params = useLocalSearchParams();
+  const id = params.id;
+  const initialCategory = params.category as string;
   
-  // 2. Casting tipe data Hook (Solusi 'Property error does not exist')
   const { course, loading, error } = useCourseDetail(id) as { 
     course: Course | null; 
     loading: boolean; 
     error: any; 
   };
+  
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
-  // 3. Berikan tipe 'string' eksplisit untuk parameter
-  const handleOpenLink = async (url: string) => {
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert("Error", "Tidak dapat membuka link ini: " + url);
-    }
-  };
+  // 3. Tentukan Warna Aksen
+  // Prioritas: Kategori dari API -> Kategori dari Params -> Default
+  const categoryKey = course?.category || initialCategory || 'default';
+  const accentColor = CATEGORY_COLORS[categoryKey] || CATEGORY_COLORS.default;
 
-  // 3. Berikan tipe 'string' eksplisit
   const getIcon = (type: string) => {
     const t = type?.toUpperCase();
     switch (t) {
@@ -54,15 +63,42 @@ export default function CourseDetail() {
     }
   };
 
+  const handlePressMaterial = async (item: Material) => {
+    const type = item.type.toUpperCase();
+    
+    if (type === 'LINK' || type === 'DRIVE' || type === 'VIDEO') {
+      try {
+        const supported = await Linking.canOpenURL(item.content);
+        if (supported) {
+          await Linking.openURL(item.content);
+        } else {
+          Alert.alert("Error", "Link tidak valid/tidak didukung.");
+        }
+      } catch (err) {
+        Alert.alert("Error", "Terjadi kesalahan saat membuka link.");
+      }
+      return;
+    }
+
+    try {
+      setDownloadingId(item.id);
+      await handleFileOpen(item.content, item.title, type);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        {/* Spinner mengikuti warna kategori */}
+        <ActivityIndicator size="large" color={accentColor} />
       </View>
     );
   }
 
-  // Tampilkan error jika ada
   if (error) {
      return (
       <View style={styles.center}>
@@ -81,11 +117,17 @@ export default function CourseDetail() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: 'Detail Mata Kuliah' }} />
+      {/* 4. Update Header Navigation agar warnanya seragam */}
+      <Stack.Screen 
+        options={{ 
+          title: 'Detail Mata Kuliah',
+          headerStyle: { backgroundColor: accentColor }, // Header mengikuti warna kategori
+        }} 
+      />
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* HERO SECTION */}
-        <View style={styles.heroSection}>
+        {/* HERO SECTION DENGAN WARNA DINAMIS */}
+        <View style={[styles.heroSection, { backgroundColor: accentColor }]}>
           <View style={styles.heroHeader}>
             <Text style={styles.heroCode}>ID: {course.id}</Text> 
             <View style={styles.heroBadge}>
@@ -103,13 +145,13 @@ export default function CourseDetail() {
             Total {course.materials?.length || 0} materi tersedia
           </Text>
           
-          {/* 4. Berikan tipe 'any' atau 'Material' pada map item */}
           {course.materials && course.materials.length > 0 ? (
             course.materials.map((item: Material) => (
               <TouchableOpacity 
                 key={item.id} 
                 style={styles.materialCard}
-                onPress={() => handleOpenLink(item.content)}
+                onPress={() => handlePressMaterial(item)}
+                disabled={downloadingId !== null}
               >
                 <View style={styles.materialIcon}>
                   {getIcon(item.type)}
@@ -117,10 +159,15 @@ export default function CourseDetail() {
                 <View style={styles.materialContent}>
                   <Text style={styles.materialTitle}>{item.title}</Text>
                   <Text style={styles.materialInfo}>
-                    {item.type} • Klik untuk buka
+                    {item.type} • {(item.type === 'LINK' || item.type === 'VIDEO') ? 'Buka Link' : 'Download & Buka'}
                   </Text>
                 </View>
-                <DownloadCloud size={20} color={COLORS.textSecondary} />
+                
+                {downloadingId === item.id ? (
+                  <ActivityIndicator size="small" color={accentColor} />
+                ) : (
+                  <DownloadCloud size={20} color={COLORS.textSecondary} />
+                )}
               </TouchableOpacity>
             ))
           ) : (
@@ -139,7 +186,15 @@ export default function CourseDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  heroSection: { backgroundColor: COLORS.primary, padding: SIZES.padding * 1.5, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, marginBottom: 20 },
+  
+  // Hapus backgroundColor static dari sini karena sudah via inline-style
+  heroSection: { 
+    padding: SIZES.padding * 1.5, 
+    borderBottomLeftRadius: 24, 
+    borderBottomRightRadius: 24, 
+    marginBottom: 20 
+  },
+  
   heroHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   heroCode: { fontFamily: 'Poppins-Bold', color: 'rgba(255,255,255,0.8)', fontSize: 14 },
   heroBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },

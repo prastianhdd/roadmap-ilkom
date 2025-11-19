@@ -52,6 +52,7 @@ export default function RootLayout() {
       {/* Layar Dinamis */}
       <Stack.Screen name="semester/[id]" options={{ title: 'Daftar Mata Kuliah' }} />
       <Stack.Screen name="course/[id]" options={{ title: 'Detail Materi' }} />
+      <Stack.Screen name="about" options={{ title: 'Tentang Aplikasi' }} />
     </Stack>
   );
 }
